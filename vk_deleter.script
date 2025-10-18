@@ -1,0 +1,128 @@
+// ===================================================================
+// СКРИПТ ДЛЯ УДАЛЕНИЯ ПОСТОВ ВК 2025.10.18
+// Версия: 8.1
+// ===================================================================
+// ИНСТРУКЦИЯ:
+// 1. Откройте свою страницу ВКонтакте (https://vk.com/)
+// 2. Нажмите F12, откройте вкладку "Console" (Консоль).
+// 3. Вставьте этот ВЕСЬ код и нажмите Enter.
+// 4. Следите за сообщениями в консоли.
+// ===================================================================
+
+(function() {
+    'use strict';
+
+    // --- НАСТРОЙКИ ---
+    const DELETE_DELAY_MS = 2000; // Задержка между удалениями.
+    const MAX_POSTS_TO_DELETE = 10000; // Поставьте 0 для удаления всех.
+    // -----------------
+
+    let deletedCount = 0;
+    let processedCount = 0;
+    let isRunning = true;
+    let postsQueue = [];
+
+    function log(message) {
+        console.log(`[VK Deleter v8.1] ${new Date().toLocaleTimeString()}: ${message}`);
+    }
+
+    // --- ШАГ 1: НАХОДИМ ПОСТЫ И ПОДГОТАВЛИВАЕМ ИХ К УДАЛЕНИЮ ---
+    function preparePostsForDeletion() {
+        log("Сканирую страницу и подготавливаю посты...");
+        postsQueue = [];
+
+        const posts = document.querySelectorAll('[data-post-id]');
+        log(`Найдено ${posts.length} постов. Начинаю подготовку...`);
+
+        posts.forEach((post, index) => {
+            const hoverEvent = new MouseEvent('mouseover', {
+                'view': window,
+                'bubbles': true,
+                'cancelable': true
+            });
+            post.dispatchEvent(hoverEvent);
+        });
+
+        log("Все посты подготовлены. Теперь ищу кнопки и связываю их с постами...");
+        
+        setTimeout(() => {
+            const actionButtons = document.querySelectorAll('button[data-testid="post_context_menu_toggle"]');
+            log(`Найдено ${actionButtons.length} кнопок действий.`);
+
+            actionButtons.forEach(button => {
+                const parentPost = button.closest('[data-post-id]');
+                if (parentPost) {
+                    postsQueue.push({
+                        postElement: parentPost,
+                        buttonElement: button
+                    });
+                }
+            });
+            
+            log(`В очередь на удаление добавлено ${postsQueue.length} постов.`);
+            if (postsQueue.length > 0) {
+                mainLoop();
+            } else {
+                log("Не удалось сопоставить посты и кнопки. Попробуйте еще раз.");
+            }
+        }, 1000);
+    }
+
+    // --- ШАГ 2: ЛОГИКА УДАЛЕНИЯ ---
+    function processNextPost() {
+        if (!isRunning || postsQueue.length === 0) {
+            if (postsQueue.length === 0) {
+                log("Текущая пачка постов обработана. Ищу новые...");
+                window.scrollBy(0, 800);
+                setTimeout(() => {
+                    preparePostsForDeletion();
+                }, 2000);
+            }
+            return;
+        }
+
+        if (MAX_POSTS_TO_DELETE > 0 && deletedCount >= MAX_POSTS_TO_DELETE) {
+            log(`Достигнут лимит в ${MAX_POSTS_TO_DELETE} удалений. Останавливаюсь.`);
+            isRunning = false;
+            return;
+        }
+
+        const { postElement, buttonElement } = postsQueue.shift();
+        processedCount++;
+        log(`Обрабатываю пост #${processedCount}...`);
+
+        postElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        setTimeout(() => {
+            buttonElement.click();
+
+            setTimeout(() => {
+                const deleteMenuItem = document.querySelector('[data-testid="post_context_menu_item_delete"]');
+                
+                if (deleteMenuItem) {
+                    log("Нажимаю 'Удалить' в меню.");
+                    deleteMenuItem.click();
+                    
+                    deletedCount++;
+                    log(`Пост удален. Всего удалено: ${deletedCount}`);
+                    
+                    setTimeout(mainLoop, DELETE_DELAY_MS);
+                } else {
+                    log("Не нашел пункт 'Удалить' в меню. Пропускаю.");
+                    setTimeout(mainLoop, 500);
+                }
+            }, 500);
+        }, 500);
+    }
+
+    // --- ШАГ 3: ОСНОВНОЙ ЦИКЛ ---
+    function mainLoop() {
+        processNextPost();
+    }
+
+    // --- ЗАПУСК ---
+    log("--- Скрипт запущен. ---");
+    log("ВАЖНО: Не переключайте вкладки, пока скрипт работает!");
+    preparePostsForDeletion();
+
+})();
